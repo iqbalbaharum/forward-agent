@@ -17,7 +17,7 @@ from agents.story import StoryAgent
 from agents.test_generator import TestGeneratorAgent
 from config.settings import (
     STORIES_DIR, TESTS_DIR, ARTIFACTS_DIR, 
-    OPENROUTER_API_KEY, OPENROUTER_MODEL
+    OPENROUTER_API_KEY
 )
 
 
@@ -40,8 +40,8 @@ def cli():
 @click.argument("requirement")
 def new(requirement: str):
     """Submit a new requirement to generate stories"""
-    if not QWEN_API_KEY:
-        click.echo("Error: QWEN_API_KEY not set in environment or .env file")
+    if not OPENROUTER_API_KEY:
+        click.echo("Error: OPENROUTER_API_KEY not set in environment or .env file")
         sys.exit(1)
     
     click.echo(f"Processing requirement: {requirement[:50]}...")

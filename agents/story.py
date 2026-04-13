@@ -1,4 +1,5 @@
 from core.orchestrator import Agent
+from core.llm import LLMClient
 from typing import Dict, Any, Optional
 
 
@@ -32,6 +33,8 @@ Focus on delivering value to the user with each story. Acceptance criteria must 
 
 
 class StoryAgent(Agent):
+    AGENT_NAME = "story"
+    
     def __init__(self):
         super().__init__(
             name="StoryAgent",
@@ -39,6 +42,7 @@ class StoryAgent(Agent):
             description="Breaks down epics into actionable user stories with acceptance criteria",
             system_prompt=STORY_AGENT_PROMPT
         )
+        self.llm = LLMClient(agent_name=self.AGENT_NAME)
 
     def execute(self, epics: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         epics_text = ""

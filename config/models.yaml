@@ -1,0 +1,53 @@
+# Agent Model Configuration
+# Each agent can have its own model, temperature, and settings
+# If an agent is not listed here, the system will raise an error
+
+agents:
+  requirement:
+    model: "qwen/qwen2.5-72b-instruct"
+    temperature: 0.3
+    max_tokens: 4000
+    description: "Analyzes and structures raw requirements"
+
+  epic:
+    model: "qwen/qwen2.5-72b-instruct"
+    temperature: 0.3
+    max_tokens: 4000
+    description: "Transforms requirements into logical epics"
+
+  story:
+    model: "qwen/qwen2.5-72b-instruct"
+    temperature: 0.4
+    max_tokens: 4000
+    description: "Breaks down epics into user stories"
+
+  test_generator:
+    model: "qwen/qwen2.5-32b-instruct"
+    temperature: 0.2
+    max_tokens: 3000
+    description: "Generates pytest unit tests"
+
+  # code:
+  #   model: "qwen/qwen2.5-72b-instruct"
+  #   temperature: 0.3
+  #   max_tokens: 4000
+  #   description: "Implements code from stories"
+
+  # review:
+  #   model: "qwen/qwen2.5-72b-instruct"
+  #   temperature: 0.2
+  #   max_tokens: 3000
+  #   description: "Reviews code quality"
+
+# Global defaults
+defaults:
+  base_url: "https://openrouter.ai/api/v1"
+  timeout: 60
+  fallback_model: "qwen/qwen2.5-72b-instruct"
+
+# Registered agents - must match config in orchestrator
+registered_agents:
+  - requirement
+  - epic
+  - story
+  - test_generator

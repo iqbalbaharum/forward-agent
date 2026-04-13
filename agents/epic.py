@@ -1,4 +1,5 @@
 from core.orchestrator import Agent
+from core.llm import LLMClient
 from typing import Dict, Any, Optional
 
 
@@ -30,6 +31,8 @@ Each epic should be self-contained and deliver value independently where possibl
 
 
 class EpicAgent(Agent):
+    AGENT_NAME = "epic"
+    
     def __init__(self):
         super().__init__(
             name="EpicAgent",
@@ -37,6 +40,7 @@ class EpicAgent(Agent):
             description="Transforms requirements into logical epics and work packages",
             system_prompt=EPIC_AGENT_PROMPT
         )
+        self.llm = LLMClient(agent_name=self.AGENT_NAME)
 
     def execute(self, requirements: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         req_str = f"""Requirements to transform into epics:

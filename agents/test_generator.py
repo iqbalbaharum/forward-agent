@@ -1,4 +1,5 @@
 from core.orchestrator import Agent
+from core.llm import LLMClient
 from typing import Dict, Any, Optional
 
 
@@ -31,6 +32,8 @@ Generate tests that a developer can run directly to verify their implementation.
 
 
 class TestGeneratorAgent(Agent):
+    AGENT_NAME = "test_generator"
+    
     def __init__(self):
         super().__init__(
             name="TestGeneratorAgent",
@@ -38,6 +41,7 @@ class TestGeneratorAgent(Agent):
             description="Generates pytest unit tests for user stories",
             system_prompt=TEST_GENERATOR_PROMPT
         )
+        self.llm = LLMClient(agent_name=self.AGENT_NAME)
 
     def execute(self, story: Dict[str, Any], context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         story_info = f"""User Story to generate tests for:

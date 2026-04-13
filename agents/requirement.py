@@ -1,4 +1,5 @@
 from core.orchestrator import Agent
+from core.llm import LLMClient
 from typing import Dict, Any, Optional
 
 
@@ -26,6 +27,8 @@ Be concise but thorough. Focus on actionable information that engineers can use.
 
 
 class RequirementAgent(Agent):
+    AGENT_NAME = "requirement"
+    
     def __init__(self):
         super().__init__(
             name="RequirementAgent",
@@ -33,6 +36,7 @@ class RequirementAgent(Agent):
             description="Analyzes and structures raw requirements into structured format",
             system_prompt=REQUIREMENT_AGENT_PROMPT
         )
+        self.llm = LLMClient(agent_name=self.AGENT_NAME)
 
     def execute(self, requirement: str, context: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         messages = self._build_messages(
