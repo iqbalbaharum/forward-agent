@@ -17,7 +17,7 @@ from agents.story import StoryAgent
 from agents.test_generator import TestGeneratorAgent
 from config.settings import (
     STORIES_DIR, TESTS_DIR, ARTIFACTS_DIR, 
-    QWEN_API_KEY, QWEN_MODEL
+    OPENROUTER_API_KEY, OPENROUTER_MODEL
 )
 
 

@@ -1,15 +1,19 @@
 from openai import OpenAI
-from config.settings import QWEN_API_KEY, QWEN_BASE_URL, QWEN_MODEL
+from config.settings import OPENROUTER_API_KEY, OPENROUTER_BASE_URL, OPENROUTER_MODEL
 from typing import List, Dict, Any, Optional
 
 
 class LLMClient:
     def __init__(self, api_key: Optional[str] = None, base_url: Optional[str] = None, model: Optional[str] = None):
         self.client = OpenAI(
-            api_key=api_key or QWEN_API_KEY,
-            base_url=base_url or QWEN_BASE_URL
+            api_key=api_key or OPENROUTER_API_KEY,
+            base_url=base_url or OPENROUTER_BASE_URL,
+            default_headers={
+                "HTTP-Referer": "https://github.com/iqbalbaharum/forward-agent",
+                "X-Title": "Forward Agent"
+            }
         )
-        self.model = model or QWEN_MODEL
+        self.model = model or OPENROUTER_MODEL
 
     def chat(self, messages: List[Dict[str, str]], temperature: float = 0.7, max_tokens: int = 4000) -> str:
         response = self.client.chat.completions.create(
