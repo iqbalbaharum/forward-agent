@@ -37,14 +37,15 @@ class WorkflowState:
         self.stories.append(story)
         self.updated_at = datetime.utcnow().isoformat()
 
-    def update_story_status(self, story_id: str, status: StoryStatus, feedback: Optional[str] = None):
+    def update_story_status(self, story_id: str, status: StoryStatus, feedback: Optional[str] = None) -> bool:
         for story in self.stories:
             if story.get("id") == story_id:
                 story["status"] = status.value
                 if feedback:
                     story["feedback"] = feedback
                 self.updated_at = datetime.utcnow().isoformat()
-                break
+                return True
+        return False
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -112,3 +113,12 @@ class StateManager:
                     "created_at": state.created_at
                 })
         return states
+
+    def update_story_status(self, session_id: str, story_id: str, status: StoryStatus, feedback: Optional[str] = None) -> bool:
+        state = self.load_state(session_id)
+        if not state:
+            return False
+        success = state.update_story_status(story_id, status, feedback)
+        if success:
+            self.save_state(session_id)
+        return success

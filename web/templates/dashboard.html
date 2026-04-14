@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Forward Agent - Dashboard{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Stats Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="text-sm font-medium text-gray-500">Total Sessions</div>
+            <div class="text-3xl font-bold text-gray-900" id="total-sessions">-</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="text-sm font-medium text-gray-500">Total Stories</div>
+            <div class="text-3xl font-bold text-gray-900" id="total-stories">-</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="text-sm font-medium text-gray-500">Approved</div>
+            <div class="text-3xl font-bold text-green-600" id="approved-stories">-</div>
+        </div>
+        <div class="bg-white rounded-lg shadow p-6">
+            <div class="text-sm font-medium text-gray-500">Pending Review</div>
+            <div class="text-3xl font-bold text-yellow-600" id="pending-stories">-</div>
+        </div>
+    </div>
+
+    <!-- Session Selector -->
+    <div class="bg-white rounded-lg shadow p-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <label class="text-sm font-medium text-gray-700">Session:</label>
+                <select id="session-select" class="border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="">Select a session...</option>
+                </select>
+            </div>
+            <div class="flex space-x-2">
+                <button id="tab-sessions" onclick="switchTab('sessions')" class="px-4 py-2 text-sm font-medium rounded-md bg-primary text-white">
+                    Sessions
+                </button>
+                <button id="tab-epics" onclick="switchTab('epics')" class="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300">
+                    Epics
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sessions View -->
+    <div id="view-sessions" class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Stories in Session</h2>
+        </div>
+        <div class="p-6">
+            <div id="sessions-content" class="space-y-4">
+                <div class="text-center py-12 text-gray-500">Select a session to view stories</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Epics View (Hidden by default) -->
+    <div id="view-epics" class="hidden bg-white rounded-lg shadow">
+        <div class="p-6 border-b border-gray-200">
+            <h2 class="text-lg font-semibold text-gray-900">Epics</h2>
+        </div>
+        <div class="p-6">
+            <div id="epics-content" class="space-y-4">
+                <div class="text-center py-12 text-gray-500">Select a session to view epics</div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentSession = '';
+let currentTab = 'sessions';
+
+async function loadSessions() {
+    try {
+        const response = await fetch('/api/sessions');
+        const sessions = await response.json();
+        
+        const select = document.getElementById('session-select');
+        select.innerHTML = '<option value="">Select a session...</option>';
+        
+        sessions.forEach(session => {
+            const option = document.createElement('option');
+            option.value = session.session_id;
+            option.textContent = `${session.session_id} - ${session.requirement.substring(0, 40)}...`;
+            select.appendChild(option);
+        });
+        
+        if (sessions.length > 0) {
+            select.value = sessions[0].session_id;
+            currentSession = sessions[0].session_id;
+            loadSessionData();
+        }
+        
+        loadStats();
+    } catch (error) {
+        console.error('Failed to load sessions:', error);
+    }
+}
+
+async function loadStats() {
+    try {
+        const response = await fetch('/api/stats');
+        const stats = await response.json();
+        
+        document.getElementById('total-sessions').textContent = stats.total_sessions || 0;
+        document.getElementById('total-stories').textContent = stats.total_stories || 0;
+        document.getElementById('approved-stories').textContent = stats.approved || 0;
+        document.getElementById('pending-stories').textContent = stats.pending || 0;
+    } catch (error) {
+        console.error('Failed to load stats:', error);
+    }
+}
+
+async function loadSessionData() {
+    if (!currentSession) return;
+    
+    if (currentTab === 'sessions') {
+        loadSessionsView();
+    } else {
+        loadEpicsView();
+    }
+}
+
+async function loadSessionsView() {
+    try {
+        const response = await fetch(`/api/sessions/${currentSession}/stories`);
+        const data = await response.json();
+        
+        const container = document.getElementById('sessions-content');
+        
+        if (!data.stories || data.stories.length === 0) {
+            container.innerHTML = '<div class="text-center py-12 text-gray-500">No stories found</div>';
+            return;
+        }
+        
+        let html = '<div class="space-y-3">';
+        data.stories.forEach(story => {
+            const statusClass = getStatusClass(story.status);
+            html += `
+                <div class="flex items-center justify-between bg-gray-50 rounded-lg p-4">
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-3">
+                            <span class="font-mono text-sm font-semibold">${story.id}</span>
+                            <span class="text-sm font-medium text-gray-700">${story.title}</span>
+                            <span class="px-2 py-0.5 text-xs font-medium rounded-full ${statusClass}">
+                                ${story.status}
+                            </span>
+                        </div>
+                        <div class="mt-1 text-xs text-gray-500">
+                            Epic: ${story.epic_id} • Priority: ${story.priority} • Points: ${story.story_points}
+                        </div>
+                    </div>
+                    <a href="/dashboard/story/${story.id}" 
+                       class="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-secondary">
+                        View
+                    </a>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Failed to load sessions view:', error);
+    }
+}
+
+async function loadEpicsView() {
+    try {
+        const response = await fetch(`/api/sessions/${currentSession}/epics`);
+        const data = await response.json();
+        
+        const container = document.getElementById('epics-content');
+        
+        if (!data.epics || data.epics.length === 0) {
+            container.innerHTML = '<div class="text-center py-12 text-gray-500">No epics found</div>';
+            return;
+        }
+        
+        let html = '<div class="space-y-4">';
+        data.epics.forEach(epic => {
+            const stories = epic.stories || [];
+            const approvedCount = stories.filter(s => s.status === 'approved').length;
+            
+            html += `
+                <div class="border border-gray-200 rounded-lg overflow-hidden">
+                    <div class="bg-gray-50 px-6 py-4 flex items-center justify-between cursor-pointer" onclick="toggleEpic('${epic.id}')">
+                        <div>
+                            <div class="flex items-center space-x-3">
+                                <span class="font-mono text-sm font-semibold">${epic.id}</span>
+                                <span class="text-lg font-medium text-gray-900">${epic.title}</span>
+                                <span class="text-sm text-gray-500">(${stories.length} stories, ${approvedCount} approved)</span>
+                            </div>
+                            <div class="text-sm text-gray-500 mt-1">${epic.description || ''}</div>
+                        </div>
+                        <svg id="icon-${epic.id}" class="w-5 h-5 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                    </div>
+                    <div id="epic-${epic.id}" class="hidden px-6 py-4 border-t border-gray-200 bg-white">
+                        <div class="space-y-3">
+            `;
+            
+            if (stories.length === 0) {
+                html += '<div class="text-sm text-gray-500">No stories linked to this epic</div>';
+            } else {
+                stories.forEach(story => {
+                    const statusClass = getStatusClass(story.status);
+                    html += `
+                        <div class="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                            <div class="flex-1">
+                                <div class="flex items-center space-x-2">
+                                    <span class="font-mono text-sm">${story.id}</span>
+                                    <span class="text-sm text-gray-700">${story.title}</span>
+                                    <span class="px-2 py-0.5 text-xs font-medium rounded-full ${statusClass}">${story.status}</span>
+                                </div>
+                            </div>
+                            <a href="/dashboard/story/${story.id}" class="text-primary hover:text-secondary text-sm">View</a>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    } catch (error) {
+        console.error('Failed to load epics view:', error);
+    }
+}
+
+function toggleEpic(epicId) {
+    const epicDiv = document.getElementById(`epic-${epicId}`);
+    const icon = document.getElementById(`icon-${epicId}`);
+    
+    if (epicDiv.classList.contains('hidden')) {
+        epicDiv.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+    } else {
+        epicDiv.classList.add('hidden');
+        icon.classList.remove('rotate-180');
+    }
+}
+
+function switchTab(tab) {
+    currentTab = tab;
+    
+    document.getElementById('tab-sessions').className = tab === 'sessions' 
+        ? 'px-4 py-2 text-sm font-medium rounded-md bg-primary text-white' 
+        : 'px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300';
+    
+    document.getElementById('tab-epics').className = tab === 'epics' 
+        ? 'px-4 py-2 text-sm font-medium rounded-md bg-primary text-white' 
+        : 'px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300';
+    
+    document.getElementById('view-sessions').classList.toggle('hidden', tab !== 'sessions');
+    document.getElementById('view-epics').classList.toggle('hidden', tab !== 'epics');
+    
+    loadSessionData();
+}
+
+function getStatusClass(status) {
+    const mapping = {
+        'approved': 'bg-green-100 text-green-800',
+        'rejected': 'bg-red-100 text-red-800',
+        'tests_generated': 'bg-blue-100 text-blue-800',
+        'generated': 'bg-yellow-100 text-yellow-800',
+        'pending': 'bg-gray-100 text-gray-800'
+    };
+    return mapping[status] || 'bg-gray-100 text-gray-800';
+}
+
+document.getElementById('session-select').addEventListener('change', function(e) {
+    currentSession = e.target.value;
+    loadSessionData();
+});
+
+loadSessions();
+</script>
+{% endblock %}

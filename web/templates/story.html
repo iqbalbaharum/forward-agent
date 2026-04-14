@@ -1,0 +1,338 @@
+{% extends "base.html" %}
+
+{% block title %}Story {{ story.id }} - Forward Agent{% endblock %}
+
+{% block extra_head %}
+<style>
+    .code-block {
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="space-y-6">
+    <!-- Back Button -->
+    <a href="/dashboard" class="inline-flex items-center text-gray-600 hover:text-gray-900">
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+        </svg>
+        Back to Dashboard
+    </a>
+
+    <!-- Story Header -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <div>
+                    <h1 class="text-2xl font-bold text-gray-900">{{ story.id }}: {{ story.title }}</h1>
+                    <div class="mt-2 flex items-center space-x-4">
+                        <span class="px-3 py-1 text-sm font-medium rounded-full
+                            {% if story.status == 'approved' %}bg-green-100 text-green-800
+                            {% elif story.status == 'rejected' %}bg-red-100 text-red-800
+                            {% elif story.status == 'tests_generated' %}bg-blue-100 text-blue-800
+                            {% elif story.status == 'generated' %}bg-yellow-100 text-yellow-800
+                            {% else %}bg-gray-100 text-gray-800{% endif %}">
+                            {{ story.status }}
+                        </span>
+                        <span class="text-sm text-gray-500">Epic: {{ story.epic_id }}</span>
+                        <span class="text-sm text-gray-500">Priority: {{ story.priority }}</span>
+                        <span class="text-sm text-gray-500">Points: {{ story.story_points }}</span>
+                    </div>
+                </div>
+                
+                <!-- Action Buttons -->
+                <div class="flex space-x-3">
+                    <button onclick="showCollaborateModal()" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-secondary hover:bg-indigo-700">
+                        Collaborate
+                    </button>
+                    
+                    <button onclick="showMockupInfo()" 
+                            class="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-gray-100 hover:bg-gray-200" disabled title="Coming soon - Figma MCP integration">
+                        Mockup
+                    </button>
+                    
+                    {% if story.status != 'approved' %}
+                    <button onclick="approveStory('{{ story.id }}')" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700">
+                        Approve
+                    </button>
+                    {% endif %}
+                    
+                    {% if story.status != 'rejected' %}
+                    <button onclick="showRejectModal()" 
+                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700">
+                        Reject
+                    </button>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Description & Acceptance Criteria -->
+        <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-3">User Story</h3>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <p class="text-gray-700">{{ story.description }}</p>
+                </div>
+            </div>
+            
+            <div>
+                <h3 class="text-lg font-semibold text-gray-900 mb-3">Technical Notes</h3>
+                <div class="bg-gray-50 rounded-lg p-4">
+                    <p class="text-gray-700">{{ story.technical_notes or 'No technical notes provided' }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="p-6 border-t border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900 mb-4">Acceptance Criteria</h3>
+            <ul class="space-y-2">
+                {% for criteria in story.acceptance_criteria %}
+                <li class="flex items-start">
+                    <svg class="w-5 h-5 text-green-500 mt-0.5 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    <span class="text-gray-700">{{ criteria }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+        
+        <!-- Feedback (if rejected) -->
+        {% if story.feedback %}
+        <div class="p-6 border-t border-gray-200 bg-red-50">
+            <h3 class="text-lg font-semibold text-red-900 mb-2">Rejection Feedback</h3>
+            <p class="text-red-700">{{ story.feedback }}</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Test Script Section -->
+    <div class="bg-white rounded-lg shadow">
+        <div class="p-6 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h2 class="text-lg font-semibold text-gray-900">Test Script</h2>
+                
+                {% if not test_code %}
+                <button onclick="generateTests('{{ story.id }}')" 
+                        id="generate-btn"
+                        class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-secondary">
+                    Generate Tests
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="p-6">
+            {% if test_code %}
+            <pre class="code-block bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto"><code>{{ test_code }}</code></pre>
+            {% else %}
+            <div class="text-center py-8 text-gray-500">
+                <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"></path>
+                </svg>
+                <p class="mt-4">No test script generated yet</p>
+                <p class="text-sm">Click "Generate Tests" to create pytest tests for this story</p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Collaborate Modal -->
+<div id="collaborate-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full">
+    <div class="relative top-20 mx-auto p-5 border w-[500px] shadow-lg rounded-md bg-white">
+        <div class="text-center">
+            <h3 class="text-lg font-medium text-gray-900">Collaborate: {{ story.id }}</h3>
+            <p class="text-sm text-gray-500 mt-1">Update technical requirements based on your feedback</p>
+        </div>
+        
+        <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Current Technical Notes:</label>
+            <div class="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 max-h-32 overflow-y-auto">
+                {{ story.technical_notes or 'No technical notes yet.' }}
+            </div>
+        </div>
+        
+        <div class="mt-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">Your Update:</label>
+            <textarea id="collaborate-prompt" 
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      rows="4" 
+                      placeholder="e.g., Change login to Google OAuth2, or Add shop_name field for bakery"></textarea>
+            <p class="text-xs text-gray-500 mt-1">You can enter technical or non-technical requirements - the AI will update the notes accordingly.</p>
+        </div>
+        
+        <div class="mt-4 flex justify-end space-x-3">
+            <button onclick="closeCollaborateModal()" 
+                    class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                Cancel
+            </button>
+            <button id="collaborate-btn" onclick="submitCollaborate('{{ story.id }}')" 
+                    class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-indigo-700">
+                Update
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal -->
+<div id="reject-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3 text-center">
+            <h3 class="text-lg font-medium text-gray-900">Reject Story</h3>
+            <div class="mt-4 px-4 py-2">
+                <textarea id="reject-feedback" 
+                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                          rows="4" 
+                          placeholder="Provide feedback for rejection..."></textarea>
+            </div>
+            <div class="mt-4 flex justify-end space-x-3">
+                <button onclick="closeRejectModal()" 
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                    Cancel
+                </button>
+                <button onclick="rejectStory('{{ story.id }}')" 
+                        class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                    Reject
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showRejectModal() {
+    document.getElementById('reject-modal').classList.remove('hidden');
+}
+
+function closeRejectModal() {
+    document.getElementById('reject-modal').classList.add('hidden');
+}
+
+async function approveStory(storyId) {
+    try {
+        const response = await fetch(`/api/stories/${storyId}/approve`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('Story approved successfully!');
+            window.location.reload();
+        } else {
+            alert('Failed to approve: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function rejectStory(storyId) {
+    const feedback = document.getElementById('reject-feedback').value;
+    
+    try {
+        const response = await fetch(`/api/stories/${storyId}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ feedback })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            closeRejectModal();
+            alert('Story rejected');
+            window.location.reload();
+        } else {
+            alert('Failed to reject: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function generateTests(storyId) {
+    const btn = document.getElementById('generate-btn');
+    btn.disabled = true;
+    btn.textContent = 'Generating...';
+    
+    try {
+        const response = await fetch(`/api/stories/${storyId}/tests`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert('Tests generated successfully!');
+            window.location.reload();
+        } else {
+            alert('Failed to generate tests: ' + result.error);
+            btn.disabled = false;
+            btn.textContent = 'Generate Tests';
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Generate Tests';
+    }
+}
+
+function showCollaborateModal() {
+    document.getElementById('collaborate-modal').classList.remove('hidden');
+}
+
+function closeCollaborateModal() {
+    document.getElementById('collaborate-modal').classList.add('hidden');
+    document.getElementById('collaborate-prompt').value = '';
+}
+
+async function submitCollaborate(storyId) {
+    const prompt = document.getElementById('collaborate-prompt').value.trim();
+    const btn = document.getElementById('collaborate-btn');
+    
+    if (!prompt) {
+        alert('Please enter your requirements or changes');
+        return;
+    }
+    
+    btn.disabled = true;
+    btn.textContent = 'Processing...';
+    
+    try {
+        const response = await fetch(`/api/stories/${storyId}/collaborate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt })
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            closeCollaborateModal();
+            alert(`Technical notes updated!\n\nChange type: ${result.change_type}\nSummary: ${result.summary}`);
+            window.location.reload();
+        } else {
+            alert('Failed to update: ' + result.error);
+            btn.disabled = false;
+            btn.textContent = 'Update';
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+        btn.disabled = false;
+        btn.textContent = 'Update';
+    }
+}
+
+function showMockupInfo() {
+    alert('Mockup feature coming soon!\n\nThis will integrate with Figma MCP to generate visual mockups for the story.');
+}
+</script>
+{% endblock %}
