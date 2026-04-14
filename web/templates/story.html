@@ -45,7 +45,7 @@
                 
                 <!-- Action Buttons -->
                 <div class="flex space-x-3">
-                    <button onclick="showCollaborateModal()" 
+                    <button onclick="showSpeculateModal()" 
                             class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-secondary hover:bg-indigo-700">
                         Collaborate
                     </button>
@@ -144,38 +144,41 @@
     </div>
 </div>
 
-<!-- Collaborate Modal -->
-<div id="collaborate-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full">
-    <div class="relative top-20 mx-auto p-5 border w-[500px] shadow-lg rounded-md bg-white">
+<!-- Speculate Modal -->
+<div id="speculate-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full">
+    <div class="relative top-20 mx-auto p-5 border w-[600px] shadow-lg rounded-md bg-white">
         <div class="text-center">
             <h3 class="text-lg font-medium text-gray-900">Collaborate: {{ story.id }}</h3>
-            <p class="text-sm text-gray-500 mt-1">Update technical requirements based on your feedback</p>
+            <p class="text-sm text-gray-500 mt-1">
+                For complex changes, new epics/stories may be generated automatically.
+            </p>
         </div>
         
         <div class="mt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Current Technical Notes:</label>
-            <div class="bg-gray-50 rounded-lg p-3 text-sm text-gray-600 max-h-32 overflow-y-auto">
-                {{ story.technical_notes or 'No technical notes yet.' }}
-            </div>
-        </div>
-        
-        <div class="mt-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Your Update:</label>
-            <textarea id="collaborate-prompt" 
+            <label class="block text-sm font-medium text-gray-700 mb-2">Your Feedback:</label>
+            <textarea id="speculate-feedback" 
                       class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                      rows="4" 
-                      placeholder="e.g., Change login to Google OAuth2, or Add shop_name field for bakery"></textarea>
-            <p class="text-xs text-gray-500 mt-1">You can enter technical or non-technical requirements - the AI will update the notes accordingly.</p>
+                      rows="5" 
+                      placeholder="e.g., 'Change background to red' (simple) or 'Background should follow the value from settings page' (may trigger new stories)"></textarea>
+            <p class="text-xs text-gray-500 mt-1">
+                Simple changes update technical notes. Complex changes may create new epics/stories.
+            </p>
+        </div>
+        
+        <div id="speculate-loading" class="hidden mt-4 text-center">
+            <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-secondary"></div>
+            <p class="text-sm text-gray-500 mt-2">Analyzing feedback...</p>
         </div>
         
         <div class="mt-4 flex justify-end space-x-3">
-            <button onclick="closeCollaborateModal()" 
+            <button onclick="closeSpeculateModal()" 
+                    id="speculate-cancel-btn"
                     class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
                 Cancel
             </button>
-            <button id="collaborate-btn" onclick="submitCollaborate('{{ story.id }}')" 
+            <button id="speculate-btn" onclick="submitSpeculate('{{ story.id }}')" 
                     class="px-4 py-2 bg-secondary text-white rounded-md hover:bg-indigo-700">
-                Update
+                Submit
             </button>
         </div>
     </div>
@@ -286,48 +289,72 @@ async function generateTests(storyId) {
     }
 }
 
-function showCollaborateModal() {
-    document.getElementById('collaborate-modal').classList.remove('hidden');
+function showSpeculateModal() {
+    document.getElementById('speculate-modal').classList.remove('hidden');
 }
 
-function closeCollaborateModal() {
-    document.getElementById('collaborate-modal').classList.add('hidden');
-    document.getElementById('collaborate-prompt').value = '';
+function closeSpeculateModal() {
+    document.getElementById('speculate-modal').classList.add('hidden');
+    document.getElementById('speculate-feedback').value = '';
+    document.getElementById('speculate-loading').classList.add('hidden');
+    document.getElementById('speculate-btn').classList.remove('hidden');
+    document.getElementById('speculate-cancel-btn').classList.remove('hidden');
 }
 
-async function submitCollaborate(storyId) {
-    const prompt = document.getElementById('collaborate-prompt').value.trim();
-    const btn = document.getElementById('collaborate-btn');
+async function submitSpeculate(storyId) {
+    const feedback = document.getElementById('speculate-feedback').value.trim();
+    const btn = document.getElementById('speculate-btn');
+    const loading = document.getElementById('speculate-loading');
     
-    if (!prompt) {
-        alert('Please enter your requirements or changes');
+    if (!feedback) {
+        alert('Please enter your feedback');
+        return;
+    }
+    
+    if (feedback.length < 10) {
+        alert('Feedback must be at least 10 characters');
         return;
     }
     
     btn.disabled = true;
-    btn.textContent = 'Processing...';
+    btn.classList.add('hidden');
+    document.getElementById('speculate-cancel-btn').classList.add('hidden');
+    loading.classList.remove('hidden');
     
     try {
-        const response = await fetch(`/api/stories/${storyId}/collaborate`, {
+        const response = await fetch(`/api/stories/${storyId}/speculate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt })
+            body: JSON.stringify({ feedback })
         });
         const result = await response.json();
         
         if (result.success) {
-            closeCollaborateModal();
-            alert(`Technical notes updated!\n\nChange type: ${result.change_type}\nSummary: ${result.summary}`);
-            window.location.reload();
+            closeSpeculateModal();
+            
+            if (result.change_type === 'simple') {
+                alert(`Technical notes updated!\n\nReasoning: ${result.reasoning}`);
+                window.location.reload();
+            } else {
+                const newStory = result.new_stories[0];
+                localStorage.setItem('newStoryId', newStory.id);
+                localStorage.setItem('newStoryTitle', newStory.title);
+                alert(`Complex change detected!\n\nNew ${result.new_epics[0].title} epic created.\nNew story: ${newStory.id} - ${newStory.title}\n\nThis story has been added as a dependency.`);
+                window.location.href = '/dashboard';
+            }
         } else {
-            alert('Failed to update: ' + result.error);
+            alert('Failed: ' + result.error);
             btn.disabled = false;
-            btn.textContent = 'Update';
+            btn.classList.remove('hidden');
+            document.getElementById('speculate-cancel-btn').classList.remove('hidden');
+            loading.classList.add('hidden');
         }
     } catch (error) {
         alert('Error: ' + error.message);
         btn.disabled = false;
-        btn.textContent = 'Update';
+        btn.classList.remove('hidden');
+        document.getElementById('speculate-cancel-btn').classList.remove('hidden');
+        loading.classList.add('hidden');
     }
 }
 

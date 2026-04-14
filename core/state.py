@@ -37,6 +37,71 @@ class WorkflowState:
         self.stories.append(story)
         self.updated_at = datetime.utcnow().isoformat()
 
+    def update_story(self, story_id: str, updates: Dict[str, Any]) -> bool:
+        for story in self.stories:
+            if story.get("id") == story_id:
+                story.update(updates)
+                self.updated_at = datetime.utcnow().isoformat()
+                return True
+        return False
+
+    def add_dependency(self, story_id: str, depends_on: str) -> bool:
+        for story in self.stories:
+            if story.get("id") == story_id:
+                deps = story.get("dependencies", [])
+                if isinstance(deps, str):
+                    deps = [d.strip() for d in deps.split(',') if d.strip()]
+                if depends_on not in deps:
+                    deps.append(depends_on)
+                    story["dependencies"] = deps
+                    self.updated_at = datetime.utcnow().isoformat()
+                return True
+        return False
+
+    def remove_story(self, story_id: str) -> bool:
+        for i, story in enumerate(self.stories):
+            if story.get("id") == story_id:
+                self.stories.pop(i)
+                self.updated_at = datetime.utcnow().isoformat()
+                self.clean_dependencies([story_id])
+                return True
+        return False
+
+    def clean_dependencies(self, removed_story_ids: List[str]):
+        """Remove references to deleted stories from other stories' dependencies"""
+        for story in self.stories:
+            deps = story.get("dependencies", [])
+            if isinstance(deps, str):
+                deps = [d.strip() for d in deps.split(',') if d.strip()]
+            if isinstance(deps, list):
+                story["dependencies"] = [d for d in deps if d not in removed_story_ids]
+
+    def remove_stories_by_epic(self, epic_id: str) -> List[str]:
+        removed_ids = self.get_story_ids_by_epic(epic_id)
+        self.stories = [
+            story for story in self.stories
+            if story.get("epic_id") != epic_id
+        ]
+        if removed_ids:
+            self.clean_dependencies(removed_ids)
+        self.updated_at = datetime.utcnow().isoformat()
+        return removed_ids
+
+    def get_story_ids_by_epic(self, epic_id: str) -> List[str]:
+        return [story.get("id") for story in self.stories if story.get("epic_id") == epic_id]
+
+    def get_next_story_number(self) -> int:
+        max_num = 0
+        for story in self.stories:
+            story_id = story.get("id", "")
+            if story_id.startswith("STORY-"):
+                try:
+                    num = int(story_id.split("-")[1])
+                    max_num = max(max_num, num)
+                except ValueError:
+                    pass
+        return max_num + 1
+
     def update_story_status(self, story_id: str, status: StoryStatus, feedback: Optional[str] = None) -> bool:
         for story in self.stories:
             if story.get("id") == story_id:
@@ -122,3 +187,12 @@ class StateManager:
         if success:
             self.save_state(session_id)
         return success
+
+    def remove_stories_by_epic(self, session_id: str, epic_id: str) -> List[str]:
+        state = self.load_state(session_id)
+        if not state:
+            return []
+        removed_ids = state.get_story_ids_by_epic(epic_id)
+        state.remove_stories_by_epic(epic_id)
+        self.save_state(session_id)
+        return removed_ids

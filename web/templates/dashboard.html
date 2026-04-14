@@ -3,7 +3,47 @@
 {% block title %}Forward Agent - Dashboard{% endblock %}
 
 {% block content %}
+<!-- New Story Notification -->
+<div id="new-story-notification" class="fixed top-4 right-4 bg-blue-500 text-white px-6 py-4 rounded-lg shadow-lg hidden z-50" style="display: none;">
+    <div class="flex items-center">
+        <svg class="w-6 h-6 mr-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+        </svg>
+        <div>
+            <p class="font-semibold">New Story Created!</p>
+            <p id="notification-message" class="text-sm opacity-90"></p>
+        </div>
+    </div>
+    <div class="mt-3 flex space-x-2">
+        <button onclick="viewNewStory()" class="text-sm underline hover:no-underline">View Story</button>
+        <span class="opacity-50">|</span>
+        <button onclick="dismissNotification()" class="text-sm underline hover:no-underline">Dismiss</button>
+    </div>
+</div>
+
 <div class="space-y-6">
+    <!-- New Session Prompt -->
+    <div class="bg-white rounded-lg shadow p-6">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Start New Session</h2>
+        <form id="new-session-form" onsubmit="submitNewSession(event)">
+            <div class="flex space-x-4">
+                <input type="text" id="requirement-input" 
+                       class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+                       placeholder="Enter your project requirement... e.g., Build a blog CMS with user authentication"
+                       required>
+                <button type="submit" id="submit-btn"
+                        class="px-6 py-3 bg-primary text-white font-medium rounded-lg hover:bg-secondary transition-colors">
+                    Generate Stories
+                </button>
+            </div>
+        </form>
+        <div id="loading-indicator" class="hidden mt-4 text-center">
+            <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+            <p class="text-sm text-gray-500 mt-2">Generating stories... This may take a minute.</p>
+        </div>
+    </div>
+
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-lg shadow p-6">
@@ -74,6 +114,125 @@
 <script>
 let currentSession = '';
 let currentTab = 'sessions';
+
+function checkForNewStory() {
+    const newStoryId = localStorage.getItem('newStoryId');
+    const newStoryTitle = localStorage.getItem('newStoryTitle');
+    
+    if (newStoryId && newStoryTitle) {
+        const notification = document.getElementById('new-story-notification');
+        const message = document.getElementById('notification-message');
+        
+        message.textContent = `${newStoryId} - ${newStoryTitle}`;
+        notification.style.display = 'block';
+        
+        localStorage.removeItem('newStoryId');
+        localStorage.removeItem('newStoryTitle');
+        
+        setTimeout(() => {
+            dismissNotification();
+        }, 15000);
+    }
+}
+
+async function submitNewSession(event) {
+    event.preventDefault();
+    
+    const requirement = document.getElementById('requirement-input').value.trim();
+    const submitBtn = document.getElementById('submit-btn');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    
+    if (!requirement) {
+        alert('Please enter a requirement');
+        return;
+    }
+    
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Generating...';
+    loadingIndicator.classList.remove('hidden');
+    
+    try {
+        const response = await fetch('/api/sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ requirement })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            document.getElementById('requirement-input').value = '';
+            alert(`Session ${result.session_id} created!\n${result.message}`);
+            window.location.href = '/dashboard';
+        } else {
+            alert('Error: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Generate Stories';
+        loadingIndicator.classList.add('hidden');
+    }
+}
+
+function viewNewStory() {
+    const newStoryId = document.getElementById('notification-message').textContent.split(' - ')[0];
+    if (newStoryId) {
+        window.location.href = `/dashboard/story/${newStoryId}`;
+    }
+    dismissNotification();
+}
+
+function dismissNotification() {
+    document.getElementById('new-story-notification').style.display = 'none';
+}
+
+async function deleteStory(storyId) {
+    if (!confirm(`Are you sure you want to delete ${storyId}? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/stories/${storyId}`, {
+            method: 'DELETE'
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(`Story ${storyId} deleted`);
+            loadSessionData();
+            loadStats();
+        } else {
+            alert('Failed to delete: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
+
+async function deleteEpic(epicId) {
+    if (!confirm(`Are you sure you want to delete epic ${epicId} and all its stories? This action cannot be undone.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/sessions/${currentSession}/epics/${epicId}`, {
+            method: 'DELETE'
+        });
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(`Epic ${epicId} deleted with ${result.deleted_stories.length} stories`);
+            loadSessionData();
+            loadStats();
+        } else {
+            alert('Failed to delete epic: ' + result.error);
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+    }
+}
 
 async function loadSessions() {
     try {
@@ -153,12 +312,23 @@ async function loadSessionsView() {
                         </div>
                         <div class="mt-1 text-xs text-gray-500">
                             Epic: ${story.epic_id} • Priority: ${story.priority} • Points: ${story.story_points}
+                            ${story.dependencies && story.dependencies.length > 0 ? ` • Depends on: ${story.dependencies.join(', ')}` : ''}
                         </div>
                     </div>
-                    <a href="/dashboard/story/${story.id}" 
-                       class="ml-4 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-secondary">
-                        View
-                    </a>
+                    <div class="flex items-center space-x-2">
+                        <button onclick="deleteStory('${story.id}')" 
+                                class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md"
+                                title="Delete story">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                      d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                            </svg>
+                        </button>
+                        <a href="/dashboard/story/${story.id}" 
+                           class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-secondary">
+                            View
+                        </a>
+                    </div>
                 </div>
             `;
         });
@@ -188,8 +358,8 @@ async function loadEpicsView() {
             
             html += `
                 <div class="border border-gray-200 rounded-lg overflow-hidden">
-                    <div class="bg-gray-50 px-6 py-4 flex items-center justify-between cursor-pointer" onclick="toggleEpic('${epic.id}')">
-                        <div>
+                    <div class="bg-gray-50 px-6 py-4 flex items-center justify-between">
+                        <div class="flex-1 cursor-pointer" onclick="toggleEpic('${epic.id}')">
                             <div class="flex items-center space-x-3">
                                 <span class="font-mono text-sm font-semibold">${epic.id}</span>
                                 <span class="text-lg font-medium text-gray-900">${epic.title}</span>
@@ -197,9 +367,19 @@ async function loadEpicsView() {
                             </div>
                             <div class="text-sm text-gray-500 mt-1">${epic.description || ''}</div>
                         </div>
-                        <svg id="icon-${epic.id}" class="w-5 h-5 text-gray-400 transform transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
-                        </svg>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="event.stopPropagation(); deleteEpic('${epic.id}')" 
+                                    class="p-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-md"
+                                    title="Delete epic and all its stories">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
+                            <svg id="icon-${epic.id}" class="w-5 h-5 text-gray-400 transform transition-transform cursor-pointer" fill="none" stroke="currentColor" viewBox="0 0 24 24" onclick="toggleEpic('${epic.id}')">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                            </svg>
+                        </div>
                     </div>
                     <div id="epic-${epic.id}" class="hidden px-6 py-4 border-t border-gray-200 bg-white">
                         <div class="space-y-3">
@@ -285,5 +465,6 @@ document.getElementById('session-select').addEventListener('change', function(e)
 });
 
 loadSessions();
+checkForNewStory();
 </script>
 {% endblock %}
