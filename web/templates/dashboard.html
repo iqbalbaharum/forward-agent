@@ -23,10 +23,10 @@
 </div>
 
 <div class="space-y-6">
-    <!-- New Session Prompt -->
+    <!-- New Workspace Prompt -->
     <div class="bg-white rounded-lg shadow p-6">
-        <h2 class="text-lg font-semibold text-gray-900 mb-4">Start New Session</h2>
-        <form id="new-session-form" onsubmit="submitNewSession(event)">
+        <h2 class="text-lg font-semibold text-gray-900 mb-4">Start New Workspace</h2>
+        <form id="new-workspace-form" onsubmit="submitNewWorkspace(event)">
             <div class="flex space-x-4">
                 <input type="text" id="requirement-input" 
                        class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
@@ -47,8 +47,8 @@
     <!-- Stats Cards -->
     <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="bg-white rounded-lg shadow p-6">
-            <div class="text-sm font-medium text-gray-500">Total Sessions</div>
-            <div class="text-3xl font-bold text-gray-900" id="total-sessions">-</div>
+            <div class="text-sm font-medium text-gray-500">Total Workspaces</div>
+            <div class="text-3xl font-bold text-gray-900" id="total-workspaces">-</div>
         </div>
         <div class="bg-white rounded-lg shadow p-6">
             <div class="text-sm font-medium text-gray-500">Total Stories</div>
@@ -64,18 +64,18 @@
         </div>
     </div>
 
-    <!-- Session Selector -->
+    <!-- Workspace Selector -->
     <div class="bg-white rounded-lg shadow p-4">
         <div class="flex items-center justify-between">
             <div class="flex items-center space-x-4">
-                <label class="text-sm font-medium text-gray-700">Session:</label>
-                <select id="session-select" class="border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
-                    <option value="">Select a session...</option>
+                <label class="text-sm font-medium text-gray-700">Workspace:</label>
+                <select id="workspace-select" class="border border-gray-300 rounded-md px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary">
+                    <option value="">Select a workspace...</option>
                 </select>
             </div>
             <div class="flex space-x-2">
-                <button id="tab-sessions" onclick="switchTab('sessions')" class="px-4 py-2 text-sm font-medium rounded-md bg-primary text-white">
-                    Sessions
+                <button id="tab-stories" onclick="switchTab('stories')" class="px-4 py-2 text-sm font-medium rounded-md bg-primary text-white">
+                    Stories
                 </button>
                 <button id="tab-epics" onclick="switchTab('epics')" class="px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300">
                     Epics
@@ -84,14 +84,14 @@
         </div>
     </div>
 
-    <!-- Sessions View -->
-    <div id="view-sessions" class="bg-white rounded-lg shadow">
+    <!-- Stories View -->
+    <div id="view-stories" class="bg-white rounded-lg shadow">
         <div class="p-6 border-b border-gray-200">
-            <h2 class="text-lg font-semibold text-gray-900">Stories in Session</h2>
+            <h2 class="text-lg font-semibold text-gray-900">Stories in Workspace</h2>
         </div>
         <div class="p-6">
-            <div id="sessions-content" class="space-y-4">
-                <div class="text-center py-12 text-gray-500">Select a session to view stories</div>
+            <div id="stories-content" class="space-y-4">
+                <div class="text-center py-12 text-gray-500">Select a workspace to view stories</div>
             </div>
         </div>
     </div>
@@ -103,7 +103,7 @@
         </div>
         <div class="p-6">
             <div id="epics-content" class="space-y-4">
-                <div class="text-center py-12 text-gray-500">Select a session to view epics</div>
+                <div class="text-center py-12 text-gray-500">Select a workspace to view epics</div>
             </div>
         </div>
     </div>
@@ -112,12 +112,14 @@
 
 {% block scripts %}
 <script>
-let currentSession = '';
-let currentTab = 'sessions';
+let currentWorkspace = '';
+let currentTab = 'stories';
+let notificationWorkspaceId = '';
 
 function checkForNewStory() {
     const newStoryId = localStorage.getItem('newStoryId');
     const newStoryTitle = localStorage.getItem('newStoryTitle');
+    const workspaceId = localStorage.getItem('notificationWorkspaceId');
     
     if (newStoryId && newStoryTitle) {
         const notification = document.getElementById('new-story-notification');
@@ -125,9 +127,11 @@ function checkForNewStory() {
         
         message.textContent = `${newStoryId} - ${newStoryTitle}`;
         notification.style.display = 'block';
+        notificationWorkspaceId = workspaceId || '';
         
         localStorage.removeItem('newStoryId');
         localStorage.removeItem('newStoryTitle');
+        localStorage.removeItem('notificationWorkspaceId');
         
         setTimeout(() => {
             dismissNotification();
@@ -135,7 +139,7 @@ function checkForNewStory() {
     }
 }
 
-async function submitNewSession(event) {
+async function submitNewWorkspace(event) {
     event.preventDefault();
     
     const requirement = document.getElementById('requirement-input').value.trim();
@@ -152,7 +156,7 @@ async function submitNewSession(event) {
     loadingIndicator.classList.remove('hidden');
     
     try {
-        const response = await fetch('/api/sessions', {
+        const response = await fetch('/api/workspaces', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ requirement })
@@ -162,7 +166,7 @@ async function submitNewSession(event) {
         
         if (result.success) {
             document.getElementById('requirement-input').value = '';
-            alert(`Session ${result.session_id} created!\n${result.message}`);
+            alert(`Workspace ${result.workspace_id} created!\n${result.message}`);
             window.location.href = '/dashboard';
         } else {
             alert('Error: ' + result.error);
@@ -178,8 +182,8 @@ async function submitNewSession(event) {
 
 function viewNewStory() {
     const newStoryId = document.getElementById('notification-message').textContent.split(' - ')[0];
-    if (newStoryId) {
-        window.location.href = `/dashboard/story/${newStoryId}`;
+    if (newStoryId && notificationWorkspaceId) {
+        window.location.href = `/dashboard/${notificationWorkspaceId}/story/${newStoryId}`;
     }
     dismissNotification();
 }
@@ -194,14 +198,14 @@ async function deleteStory(storyId) {
     }
     
     try {
-        const response = await fetch(`/api/stories/${storyId}`, {
+        const response = await fetch(`/api/workspaces/${currentWorkspace}/stories/${storyId}`, {
             method: 'DELETE'
         });
         const result = await response.json();
         
         if (result.success) {
             alert(`Story ${storyId} deleted`);
-            loadSessionData();
+            loadWorkspaceData();
             loadStats();
         } else {
             alert('Failed to delete: ' + result.error);
@@ -217,14 +221,14 @@ async function deleteEpic(epicId) {
     }
     
     try {
-        const response = await fetch(`/api/sessions/${currentSession}/epics/${epicId}`, {
+        const response = await fetch(`/api/workspaces/${currentWorkspace}/epics/${epicId}`, {
             method: 'DELETE'
         });
         const result = await response.json();
         
         if (result.success) {
             alert(`Epic ${epicId} deleted with ${result.deleted_stories.length} stories`);
-            loadSessionData();
+            loadWorkspaceData();
             loadStats();
         } else {
             alert('Failed to delete epic: ' + result.error);
@@ -234,30 +238,31 @@ async function deleteEpic(epicId) {
     }
 }
 
-async function loadSessions() {
+async function loadWorkspaces() {
     try {
-        const response = await fetch('/api/sessions');
-        const sessions = await response.json();
+        const response = await fetch('/api/workspaces');
+        const workspaces = await response.json();
         
-        const select = document.getElementById('session-select');
-        select.innerHTML = '<option value="">Select a session...</option>';
+        const select = document.getElementById('workspace-select');
+        select.innerHTML = '<option value="">Select a workspace...</option>';
         
-        sessions.forEach(session => {
+        workspaces.forEach(workspace => {
             const option = document.createElement('option');
-            option.value = session.session_id;
-            option.textContent = `${session.session_id} - ${session.requirement.substring(0, 40)}...`;
+            option.value = workspace.workspace_id || workspace.session_id;
+            option.textContent = `${option.value} - ${workspace.requirement.substring(0, 40)}...`;
             select.appendChild(option);
         });
         
-        if (sessions.length > 0) {
-            select.value = sessions[0].session_id;
-            currentSession = sessions[0].session_id;
-            loadSessionData();
+        if (workspaces.length > 0) {
+            const firstId = workspaces[0].workspace_id || workspaces[0].session_id;
+            select.value = firstId;
+            currentWorkspace = firstId;
+            loadWorkspaceData();
         }
         
         loadStats();
     } catch (error) {
-        console.error('Failed to load sessions:', error);
+        console.error('Failed to load workspaces:', error);
     }
 }
 
@@ -266,7 +271,7 @@ async function loadStats() {
         const response = await fetch('/api/stats');
         const stats = await response.json();
         
-        document.getElementById('total-sessions').textContent = stats.total_sessions || 0;
+        document.getElementById('total-workspaces').textContent = stats.total_workspaces || 0;
         document.getElementById('total-stories').textContent = stats.total_stories || 0;
         document.getElementById('approved-stories').textContent = stats.approved || 0;
         document.getElementById('pending-stories').textContent = stats.pending || 0;
@@ -275,22 +280,22 @@ async function loadStats() {
     }
 }
 
-async function loadSessionData() {
-    if (!currentSession) return;
+async function loadWorkspaceData() {
+    if (!currentWorkspace) return;
     
-    if (currentTab === 'sessions') {
-        loadSessionsView();
+    if (currentTab === 'stories') {
+        loadStoriesView();
     } else {
         loadEpicsView();
     }
 }
 
-async function loadSessionsView() {
+async function loadStoriesView() {
     try {
-        const response = await fetch(`/api/sessions/${currentSession}/stories`);
+        const response = await fetch(`/api/workspaces/${currentWorkspace}/stories`);
         const data = await response.json();
         
-        const container = document.getElementById('sessions-content');
+        const container = document.getElementById('stories-content');
         
         if (!data.stories || data.stories.length === 0) {
             container.innerHTML = '<div class="text-center py-12 text-gray-500">No stories found</div>';
@@ -324,7 +329,7 @@ async function loadSessionsView() {
                                       d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
                             </svg>
                         </button>
-                        <a href="/dashboard/story/${story.id}" 
+                        <a href="/dashboard/${currentWorkspace}/story/${story.id}" 
                            class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary hover:bg-secondary">
                             View
                         </a>
@@ -335,13 +340,13 @@ async function loadSessionsView() {
         html += '</div>';
         container.innerHTML = html;
     } catch (error) {
-        console.error('Failed to load sessions view:', error);
+        console.error('Failed to load stories view:', error);
     }
 }
 
 async function loadEpicsView() {
     try {
-        const response = await fetch(`/api/sessions/${currentSession}/epics`);
+        const response = await fetch(`/api/workspaces/${currentWorkspace}/epics`);
         const data = await response.json();
         
         const container = document.getElementById('epics-content');
@@ -399,7 +404,7 @@ async function loadEpicsView() {
                                     <span class="px-2 py-0.5 text-xs font-medium rounded-full ${statusClass}">${story.status}</span>
                                 </div>
                             </div>
-                            <a href="/dashboard/story/${story.id}" class="text-primary hover:text-secondary text-sm">View</a>
+                            <a href="/dashboard/${currentWorkspace}/story/${story.id}" class="text-primary hover:text-secondary text-sm">View</a>
                         </div>
                     `;
                 });
@@ -434,7 +439,7 @@ function toggleEpic(epicId) {
 function switchTab(tab) {
     currentTab = tab;
     
-    document.getElementById('tab-sessions').className = tab === 'sessions' 
+    document.getElementById('tab-stories').className = tab === 'stories' 
         ? 'px-4 py-2 text-sm font-medium rounded-md bg-primary text-white' 
         : 'px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300';
     
@@ -442,10 +447,10 @@ function switchTab(tab) {
         ? 'px-4 py-2 text-sm font-medium rounded-md bg-primary text-white' 
         : 'px-4 py-2 text-sm font-medium rounded-md bg-gray-200 text-gray-700 hover:bg-gray-300';
     
-    document.getElementById('view-sessions').classList.toggle('hidden', tab !== 'sessions');
+    document.getElementById('view-stories').classList.toggle('hidden', tab !== 'stories');
     document.getElementById('view-epics').classList.toggle('hidden', tab !== 'epics');
     
-    loadSessionData();
+    loadWorkspaceData();
 }
 
 function getStatusClass(status) {
@@ -459,12 +464,12 @@ function getStatusClass(status) {
     return mapping[status] || 'bg-gray-100 text-gray-800';
 }
 
-document.getElementById('session-select').addEventListener('change', function(e) {
-    currentSession = e.target.value;
-    loadSessionData();
+document.getElementById('workspace-select').addEventListener('change', function(e) {
+    currentWorkspace = e.target.value;
+    loadWorkspaceData();
 });
 
-loadSessions();
+loadWorkspaces();
 checkForNewStory();
 </script>
 {% endblock %}

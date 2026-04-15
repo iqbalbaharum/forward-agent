@@ -171,6 +171,7 @@ class StateManager:
             state = self.load_state(file_path.stem)
             if state:
                 states.append({
+                    "workspace_id": state.session_id,
                     "session_id": state.session_id,
                     "requirement": state.requirement[:50] + "..." if len(state.requirement) > 50 else state.requirement,
                     "status": state.status,

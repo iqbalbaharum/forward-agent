@@ -40,6 +40,9 @@
                         <span class="text-sm text-gray-500">Epic: {{ story.epic_id }}</span>
                         <span class="text-sm text-gray-500">Priority: {{ story.priority }}</span>
                         <span class="text-sm text-gray-500">Points: {{ story.story_points }}</span>
+                        {% if story.dependencies and story.dependencies %}
+                        <span class="text-sm text-gray-500">Depends on: {{ story.dependencies|join(', ') }}</span>
+                        {% endif %}
                     </div>
                 </div>
                 
@@ -184,27 +187,114 @@
     </div>
 </div>
 
-<!-- Reject Modal -->
-<div id="reject-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full">
-    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
-        <div class="mt-3 text-center">
+<!-- Reject Modal - Step 1: Feedback Input -->
+<div id="reject-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-20 mx-auto p-5 border w-[500px] shadow-lg rounded-md bg-white">
+        <div class="text-center">
             <h3 class="text-lg font-medium text-gray-900">Reject Story</h3>
-            <div class="mt-4 px-4 py-2">
-                <textarea id="reject-feedback" 
-                          class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
-                          rows="4" 
-                          placeholder="Provide feedback for rejection..."></textarea>
+            <p class="text-sm text-gray-500 mt-1">Provide feedback to help realign this story</p>
+        </div>
+        
+        <div class="mt-4">
+            <textarea id="reject-feedback" 
+                      class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
+                      rows="5" 
+                      placeholder="e.g., 'This is too complex, simplify it' or 'Need better security for enterprise clients'"></textarea>
+        </div>
+        
+        <div id="reject-loading" class="hidden mt-4 text-center">
+            <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
+            <p class="text-sm text-gray-500 mt-2">Analyzing feedback...</p>
+        </div>
+        
+        <div class="mt-4 flex justify-end space-x-3">
+            <button onclick="closeRejectModal()" 
+                    id="reject-cancel-btn"
+                    class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                Cancel
+            </button>
+            <button onclick="submitRejectFeedback('{{ story.id }}')" 
+                    id="reject-submit-btn"
+                    class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
+                Analyze
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Reject Modal - Step 2: Project-Level Analysis Results -->
+<div id="reject-analysis-modal" class="fixed inset-0 bg-gray-600 bg-opacity-50 hidden overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-[800px] shadow-lg rounded-md bg-white max-h-[90vh] overflow-y-auto">
+        <div class="text-center">
+            <h3 class="text-lg font-medium text-gray-900">Project Requirements Analysis</h3>
+            <p class="text-sm text-gray-500 mt-1">Understanding your priorities from rejection patterns</p>
+        </div>
+        
+        <div id="analysis-results" class="mt-4 space-y-4">
+            <!-- All Rejected Stories -->
+            <div class="bg-red-50 rounded-lg p-4">
+                <h4 class="font-medium text-red-900">Stories Rejected</h4>
+                <ul id="rejected-stories-list" class="text-red-700 mt-2 text-sm list-disc list-inside"></ul>
             </div>
-            <div class="mt-4 flex justify-end space-x-3">
-                <button onclick="closeRejectModal()" 
-                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
-                    Cancel
-                </button>
-                <button onclick="rejectStory('{{ story.id }}')" 
-                        class="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700">
-                    Reject
-                </button>
+            
+            <!-- Detected Priorities -->
+            <div class="bg-blue-50 rounded-lg p-4">
+                <h4 class="font-medium text-blue-900">Detected Priorities</h4>
+                <div id="priorities-display" class="mt-2 flex flex-wrap gap-2"></div>
             </div>
+            
+            <!-- Patterns Detected -->
+            <div class="bg-purple-50 rounded-lg p-4">
+                <h4 class="font-medium text-purple-900">Patterns Detected</h4>
+                <ul id="patterns-list" class="text-purple-700 mt-2 text-sm list-disc list-inside"></ul>
+            </div>
+            
+            <!-- Updated Project Summary -->
+            <div class="bg-green-50 rounded-lg p-4">
+                <h4 class="font-medium text-green-900">Updated Project Summary</h4>
+                <p id="updated-summary" class="text-green-700 mt-2"></p>
+            </div>
+            
+            <!-- Scope Changes -->
+            <div class="bg-gray-50 rounded-lg p-4">
+                <h4 class="font-medium text-gray-900">Scope Changes</h4>
+                <div class="mt-2">
+                    <div id="removed-features" class="mb-2 hidden">
+                        <span class="text-red-600 font-medium">Removed:</span>
+                        <ul id="removed-list" class="text-red-600 text-sm list-disc list-inside ml-4"></ul>
+                    </div>
+                    <div id="added-features" class="mb-2 hidden">
+                        <span class="text-green-600 font-medium">Added:</span>
+                        <ul id="added-list" class="text-green-600 text-sm list-disc list-inside ml-4"></ul>
+                    </div>
+                    <div id="simplified-features" class="hidden">
+                        <span class="text-yellow-600 font-medium">Simplified:</span>
+                        <ul id="simplified-list" class="text-yellow-600 text-sm list-disc list-inside ml-4"></ul>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dependency Warnings -->
+            <div id="dependency-warnings-section" class="bg-yellow-50 rounded-lg p-4 hidden">
+                <h4 class="font-medium text-yellow-900">Dependency Warnings</h4>
+                <ul id="analysis-dependencies" class="text-yellow-700 mt-2 text-sm list-disc list-inside"></ul>
+            </div>
+            
+            <!-- Requirements File Info -->
+            <div class="bg-gray-100 rounded-lg p-3 text-xs text-gray-500">
+                Requirements will be saved to: <span id="requirements-file" class="font-mono"></span>
+            </div>
+        </div>
+        
+        <div class="mt-6 flex justify-end space-x-3">
+            <button onclick="closeRejectAnalysisModal()" 
+                    class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                Cancel
+            </button>
+            <button onclick="applyRejectChanges('{{ story.id }}')" 
+                    class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700">
+                Apply Changes
+            </button>
         </div>
     </div>
 </div>
@@ -212,6 +302,8 @@
 
 {% block scripts %}
 <script>
+const WORKSPACE_ID = '{{ workspace_id }}';
+
 function showRejectModal() {
     document.getElementById('reject-modal').classList.remove('hidden');
 }
@@ -222,7 +314,7 @@ function closeRejectModal() {
 
 async function approveStory(storyId) {
     try {
-        const response = await fetch(`/api/stories/${storyId}/approve`, {
+        const response = await fetch(`/api/workspaces/${WORKSPACE_ID}/stories/${storyId}/approve`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -239,23 +331,224 @@ async function approveStory(storyId) {
     }
 }
 
-async function rejectStory(storyId) {
-    const feedback = document.getElementById('reject-feedback').value;
+async function submitRejectFeedback(storyId) {
+    const feedback = document.getElementById('reject-feedback').value.trim();
+    const submitBtn = document.getElementById('reject-submit-btn');
+    const cancelBtn = document.getElementById('reject-cancel-btn');
+    const loading = document.getElementById('reject-loading');
+    
+    if (!feedback) {
+        alert('Please enter rejection feedback');
+        return;
+    }
+    
+    submitBtn.disabled = true;
+    cancelBtn.classList.add('hidden');
+    loading.classList.remove('hidden');
     
     try {
-        const response = await fetch(`/api/stories/${storyId}/reject`, {
+        const response = await fetch(`/api/workspaces/${WORKSPACE_ID}/stories/${storyId}/reject`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ feedback })
         });
         const result = await response.json();
         
-        if (result.success) {
+        if (result.success && result.requires_confirmation) {
+            document.getElementById('reject-modal').classList.add('hidden');
+            showRejectAnalysis(result);
+        } else if (result.success && result.applied) {
             closeRejectModal();
-            alert('Story rejected');
+            alert('Story rejected with updated technical notes');
             window.location.reload();
         } else {
-            alert('Failed to reject: ' + result.error);
+            alert('Failed: ' + (result.error || 'Unknown error'));
+            submitBtn.disabled = false;
+            cancelBtn.classList.remove('hidden');
+            loading.classList.add('hidden');
+        }
+    } catch (error) {
+        alert('Error: ' + error.message);
+        submitBtn.disabled = false;
+        cancelBtn.classList.remove('hidden');
+        loading.classList.add('hidden');
+    }
+}
+
+function showRejectAnalysis(result) {
+    const analysis = result.analysis || {};
+    const scopeChanges = result.scope_changes || {};
+    const rejectedStories = result.rejected_stories || [];
+    const warnings = result.dependency_warnings || [];
+    
+    // Rejected stories list
+    const storiesList = document.getElementById('rejected-stories-list');
+    storiesList.innerHTML = '';
+    if (rejectedStories.length > 0) {
+        rejectedStories.forEach(story => {
+            const li = document.createElement('li');
+            li.textContent = `${story.id}: ${story.title || 'N/A'} - "${story.feedback}"`;
+            storiesList.appendChild(li);
+        });
+    }
+    
+    // Detected priorities
+    const prioritiesDisplay = document.getElementById('priorities-display');
+    prioritiesDisplay.innerHTML = '';
+    const priorities = analysis.priorities_detected || {};
+    const priorityLabels = {
+        'mvp': { label: 'MVP', color: 'bg-blue-100 text-blue-800' },
+        'simplicity': { label: 'Simplicity', color: 'bg-green-100 text-green-800' },
+        'speed': { label: 'Speed', color: 'bg-yellow-100 text-yellow-800' },
+        'security': { label: 'Security', color: 'bg-red-100 text-red-800' },
+        'scalability': { label: 'Scalability', color: 'bg-purple-100 text-purple-800' },
+        'quality': { label: 'Quality', color: 'bg-indigo-100 text-indigo-800' }
+    };
+    
+    for (const [key, value] of Object.entries(priorities)) {
+        if (value) {
+            const priority = priorityLabels[key] || { label: key, color: 'bg-gray-100 text-gray-800' };
+            const badge = document.createElement('span');
+            badge.className = `px-3 py-1 rounded-full text-sm font-medium ${priority.color}`;
+            badge.textContent = priority.label;
+            prioritiesDisplay.appendChild(badge);
+        }
+    }
+    
+    if (prioritiesDisplay.children.length === 0) {
+        prioritiesDisplay.innerHTML = '<span class="text-gray-500 text-sm">No specific priorities detected</span>';
+    }
+    
+    // Patterns detected
+    const patternsList = document.getElementById('patterns-list');
+    patternsList.innerHTML = '';
+    const patterns = analysis.patterns || [];
+    if (patterns.length > 0) {
+        patterns.forEach(pattern => {
+            const li = document.createElement('li');
+            li.textContent = pattern;
+            patternsList.appendChild(li);
+        });
+    } else {
+        patternsList.innerHTML = '<li>No specific patterns detected</li>';
+    }
+    
+    // Updated summary
+    document.getElementById('updated-summary').textContent = 
+        result.updated_summary || 'No summary update';
+    
+    // Scope changes - removed
+    const removedSection = document.getElementById('removed-features');
+    const removedList = document.getElementById('removed-list');
+    const removed = scopeChanges.removed || [];
+    if (removed.length > 0) {
+        removedSection.classList.remove('hidden');
+        removedList.innerHTML = '';
+        removed.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            removedList.appendChild(li);
+        });
+    } else {
+        removedSection.classList.add('hidden');
+    }
+    
+    // Scope changes - added
+    const addedSection = document.getElementById('added-features');
+    const addedList = document.getElementById('added-list');
+    const added = scopeChanges.added || [];
+    if (added.length > 0) {
+        addedSection.classList.remove('hidden');
+        addedList.innerHTML = '';
+        added.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            addedList.appendChild(li);
+        });
+    } else {
+        addedSection.classList.add('hidden');
+    }
+    
+    // Scope changes - simplified
+    const simplifiedSection = document.getElementById('simplified-features');
+    const simplifiedList = document.getElementById('simplified-list');
+    const simplified = scopeChanges.simplified || [];
+    if (simplified.length > 0) {
+        simplifiedSection.classList.remove('hidden');
+        simplifiedList.innerHTML = '';
+        simplified.forEach(item => {
+            const li = document.createElement('li');
+            li.textContent = item;
+            simplifiedList.appendChild(li);
+        });
+    } else {
+        simplifiedSection.classList.add('hidden');
+    }
+    
+    // Dependency warnings
+    const warningsSection = document.getElementById('dependency-warnings-section');
+    const warningsList = document.getElementById('analysis-dependencies');
+    if (warnings.length > 0) {
+        warningsSection.classList.remove('hidden');
+        warningsList.innerHTML = '';
+        warnings.forEach(w => {
+            const li = document.createElement('li');
+            if (typeof w === 'string') {
+                li.textContent = w;
+            } else if (w.type === 'missing_dependency') {
+                li.textContent = `${w.story} depends on missing ${w.missing}`;
+            } else if (w.type === 'circular_dependency') {
+                li.textContent = `Circular dependency: ${w.cycle.join(' -> ')}`;
+            }
+            warningsList.appendChild(li);
+        });
+    } else {
+        warningsSection.classList.add('hidden');
+    }
+    
+    // Requirements file
+    document.getElementById('requirements-file').textContent = 
+        result.requirements_file || '';
+    
+    document.getElementById('reject-analysis-modal').classList.remove('hidden');
+}
+
+function closeRejectAnalysisModal() {
+    document.getElementById('reject-analysis-modal').classList.add('hidden');
+}
+
+async function applyRejectChanges(storyId) {
+    const feedback = document.getElementById('reject-feedback').value.trim();
+    
+    try {
+        const response = await fetch(`/api/workspaces/${WORKSPACE_ID}/stories/${storyId}/reject`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ feedback, apply_changes: true })
+        });
+        const result = await response.json();
+        
+        closeRejectAnalysisModal();
+        closeRejectModal();
+        document.getElementById('reject-feedback').value = '';
+        
+        if (result.success && result.applied) {
+            const scopeChanges = result.scope_changes || {};
+            const removed = scopeChanges.removed || [];
+            const added = scopeChanges.added || [];
+            
+            let message = 'Story rejected. Project requirements updated.';
+            if (removed.length > 0 || added.length > 0) {
+                message += `\n\nScope Changes:\n`;
+                if (removed.length > 0) message += `Removed: ${removed.join(', ')}\n`;
+                if (added.length > 0) message += `Added: ${added.join(', ')}\n`;
+            }
+            message += `\nRequirements saved to: ${result.requirements_file || 'requirements.json'}`;
+            
+            alert(message);
+            window.location.reload();
+        } else {
+            alert('Failed to apply changes: ' + (result.error || 'Unknown error'));
         }
     } catch (error) {
         alert('Error: ' + error.message);
@@ -268,7 +561,7 @@ async function generateTests(storyId) {
     btn.textContent = 'Generating...';
     
     try {
-        const response = await fetch(`/api/stories/${storyId}/tests`, {
+        const response = await fetch(`/api/workspaces/${WORKSPACE_ID}/stories/${storyId}/tests`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' }
         });
@@ -299,6 +592,29 @@ function closeSpeculateModal() {
     document.getElementById('speculate-loading').classList.add('hidden');
     document.getElementById('speculate-btn').classList.remove('hidden');
     document.getElementById('speculate-cancel-btn').classList.remove('hidden');
+    const loadingText = document.getElementById('speculate-loading').querySelector('p');
+    if (loadingText) loadingText.textContent = 'Analyzing feedback...';
+}
+
+function handleSpeculateResult(result, isComplexConfirmed) {
+    closeSpeculateModal();
+    
+    if (!result.success) {
+        alert('Failed: ' + result.error);
+        return;
+    }
+    
+    if (result.change_type === 'simple') {
+        alert(`Technical notes updated!\n\nReasoning: ${result.reasoning}`);
+        window.location.reload();
+    } else if (result.change_type === 'complex' && isComplexConfirmed) {
+        const newStory = result.new_stories[0];
+        localStorage.setItem('newStoryId', newStory.id);
+        localStorage.setItem('newStoryTitle', newStory.title);
+        localStorage.setItem('notificationWorkspaceId', WORKSPACE_ID);
+        alert(`New epic and story created!\n\nEpic: ${result.new_epics[0].title}\nStory: ${newStory.id} - ${newStory.title}\n\nThis story has been added as a dependency to the original story.`);
+        window.location.href = '/dashboard';
+    }
 }
 
 async function submitSpeculate(storyId) {
@@ -322,32 +638,46 @@ async function submitSpeculate(storyId) {
     loading.classList.remove('hidden');
     
     try {
-        const response = await fetch(`/api/stories/${storyId}/speculate`, {
+        const response = await fetch(`/api/workspaces/${WORKSPACE_ID}/stories/${storyId}/speculate`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ feedback })
         });
         const result = await response.json();
         
-        if (result.success) {
-            closeSpeculateModal();
-            
-            if (result.change_type === 'simple') {
-                alert(`Technical notes updated!\n\nReasoning: ${result.reasoning}`);
-                window.location.reload();
-            } else {
-                const newStory = result.new_stories[0];
-                localStorage.setItem('newStoryId', newStory.id);
-                localStorage.setItem('newStoryTitle', newStory.title);
-                alert(`Complex change detected!\n\nNew ${result.new_epics[0].title} epic created.\nNew story: ${newStory.id} - ${newStory.title}\n\nThis story has been added as a dependency.`);
-                window.location.href = '/dashboard';
-            }
-        } else {
-            alert('Failed: ' + result.error);
+        if (result.requires_confirmation) {
+            loading.classList.add('hidden');
             btn.disabled = false;
             btn.classList.remove('hidden');
             document.getElementById('speculate-cancel-btn').classList.remove('hidden');
-            loading.classList.add('hidden');
+            
+            const confirmCreate = confirm(
+                `This feedback will create a NEW epic and story.\n\n` +
+                `Reasoning: ${result.reasoning}\n\n` +
+                `Do you want to continue?`
+            );
+            
+            if (!confirmCreate) {
+                return;
+            }
+            
+            btn.disabled = true;
+            btn.classList.add('hidden');
+            document.getElementById('speculate-cancel-btn').classList.add('hidden');
+            loading.classList.remove('hidden');
+            const loadingText = loading.querySelector('p');
+            if (loadingText) loadingText.textContent = 'Creating new epic and stories...';
+            
+            const confirmResponse = await fetch(`/api/workspaces/${WORKSPACE_ID}/stories/${storyId}/speculate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ feedback, confirm_complex: true })
+            });
+            const confirmResult = await confirmResponse.json();
+            
+            handleSpeculateResult(confirmResult, true);
+        } else {
+            handleSpeculateResult(result, false);
         }
     } catch (error) {
         alert('Error: ' + error.message);
